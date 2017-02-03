@@ -31,8 +31,9 @@ the methods where converted to public to allow for the testing and comparison of
     - `./libelas_gpu`
 
 ## In this fork
-*Added opencv mat support with GPU (can be ported easliy to CPU), so you can read, wirte matrices and make further processing using opencv APIs
-*changed default parameters to MIDDLEBURY as produces better output
+* Added opencv mat support with GPU (can be ported easliy to CPU), so you can read, wirte matrices and make further processing using opencv APIs.
+
+* changed default parameters to MIDDLEBURY as it produces better output.
 ## Licenses
 
 All the original code is licensed under the **GNU General Public License**. This can be found with the original  [libelas](http://www.cvlibs.net/software/libelas/) library. All other code is licensed under the MIT license, which is attached to this repo's LICENSE file.
