@@ -29,6 +29,7 @@ the methods where converted to public to allow for the testing and comparison of
 * To run the program do the following
     - `./libelas_cpu demo`
     - `./libelas_gpu`
+    
 ## In this fork
 * Added opencv mat support with GPU (can be ported easliy to CPU), so you can read, wirte matrices and make further processing using opencv APIs.
 
