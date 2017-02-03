@@ -11,10 +11,10 @@
 #include <stdint.h>
 #include <functional>  
 
-#include "elas.h"
-#include "descriptor.h"
-#include "triangle.h"
-#include "matrix.h"
+#include "../elas.h"
+#include "../CPU/descriptor.h"
+#include "../CPU/triangle.h"
+#include "../CPU/matrix.h"
 
 
 /**
