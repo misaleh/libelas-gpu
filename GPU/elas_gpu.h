@@ -2,7 +2,7 @@
 #define __ELAS_GPU_H__
 
 // Enable profiling
-#define PROFILE
+//#define PROFILE
 
 #include <algorithm>
 #include <math.h>
@@ -37,9 +37,8 @@ public:
 
   void computeDisparity(std::vector<support_pt> p_support,std::vector<triangle> tri,int32_t* disparity_grid,int32_t *grid_dims,
                         uint8_t* I1_desc,uint8_t* I2_desc,bool right_image,float* D);
-
+  void leftRightConsistencyCheck(float* D1,float* D2);
   void adaptiveMean (float* D);
-
 };
 
 

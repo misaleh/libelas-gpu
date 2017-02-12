@@ -13,6 +13,53 @@ __device__ uint32_t getAddressOffsetGrid_GPU (const int32_t& x,const int32_t& y,
 /**
  * CUDA Kernel for computing the match for a single UV coordinate
  */
+__global__ void leftRightConsistencyCheckKernel(float* D1,float* D2, int32_t D_width,int32_t D_height)
+{
+
+  uint32_t addr,addr_warp;
+  float    u_warp_1,u_warp_2,d1,d2;
+  float lr_threshold = 2; // instead of param.lr_threshold . hardcoded 
+  int32_t u = (blockIdx.x * blockDim.x) + threadIdx.x; //width
+  int32_t v = (blockIdx.y * blockDim.y) + threadIdx.y; //height
+      // compute address (u,v) and disparity value
+      addr     = getAddressOffsetImage_GPU(u,v,D_width);  // replace  getAddressOffsetImage_GPU
+      d1       = *(D1+addr);
+      d2       = *(D2+addr);
+
+      u_warp_1 = (float)u-d1;
+      u_warp_2 = (float)u+d2;
+    
+      
+      
+      // check if left disparity is valid
+      if (d1>=0 && u_warp_1>=0 && u_warp_1<D_width) {       
+                  
+        // compute warped image address
+        addr_warp = getAddressOffsetImage_GPU((int32_t)u_warp_1,v,D_width);
+
+        // if check failed
+        if (fabsf(*(D2+addr_warp)-d1)>lr_threshold)
+          *(D1+addr) = -10;
+        
+      // set invalid
+      } else
+        *(D1+addr) = -10;
+      
+      // check if right disparity is valid
+      if (d2>=0 && u_warp_2>=0 && u_warp_2<D_width) {       
+
+        // compute warped image address
+        addr_warp = getAddressOffsetImage_GPU((int32_t)u_warp_2,v,D_width);
+
+        // if check failed
+        if (fabsf(*(D1+addr_warp)-d2)>lr_threshold)
+          *(D2+addr) = -10;
+        
+      // set invalid
+      } else
+        *(D2+addr) = -10;
+    }
+
 __global__ void findMatch_GPU (int32_t* u_vals, int32_t* v_vals, int32_t size_total, float* planes_a, float* planes_b, float* planes_c,
                          int32_t* disparity_grid, int32_t *grid_dims, uint8_t* I1_desc, uint8_t* I2_desc,
                          int32_t* P, int32_t plane_radius, int32_t width ,int32_t height, bool* valids, bool right_image, float* D) {
@@ -22,7 +69,6 @@ __global__ void findMatch_GPU (int32_t* u_vals, int32_t* v_vals, int32_t size_to
   const int32_t window_size = 2;
   
   //TODO: Remove hard code and use param
-  bool subsampling = false;
   bool match_texture = true;
   int32_t grid_size = 20;
 
@@ -43,8 +89,7 @@ __global__ void findMatch_GPU (int32_t* u_vals, int32_t* v_vals, int32_t size_to
 
   // address of disparity we want to compute
   uint32_t d_addr;
-  if (subsampling) d_addr = getAddressOffsetImage_GPU(u/2,v/2,width/2);
-  else             d_addr = getAddressOffsetImage_GPU(u,v,width);
+  d_addr = getAddressOffsetImage_GPU(u,v,width);
   
   // check if u is ok
   if (u<window_size || u>=width-window_size)
@@ -284,13 +329,9 @@ void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<tr
   int32_t window_size = 2;
   
   // init disparity image to -10
-  if (param.subsampling) {
-    for (int32_t i=0; i<(width/2)*(height/2); i++)
-      *(D+i) = -10;
-  } else {
+
     for (int32_t i=0; i<width*height; i++)
       *(D+i) = -10;
-  }
   
   // pre-compute prior 
   float two_sigma_squared = 2*param.sigma*param.sigma;
@@ -774,4 +815,35 @@ void ElasGPU::adaptiveMean (float* D) {
   _mm_free(factor);
   free(D_copy);
   free(D_tmp);
+}
+
+void ElasGPU::leftRightConsistencyCheck(float* D1,float* D2) {
+    // get disparity image dimensions
+  int32_t D_width  = width;
+  int32_t D_height = height;
+
+  // make a copy of both images
+  //float* D1_copy = (float*)malloc(D_width*D_height*sizeof(float));
+  //float* D2_copy = (float*)malloc(D_width*D_height*sizeof(float));
+
+//cuda memm copy
+ // memcpy(D1_copy,D1,D_width*D_height*sizeof(float));
+  //memcpy(D2_copy,D2,D_width*D_height*sizeof(float));
+float *d_D1, *d_D2;
+cudaMalloc((void**) &d_D1, D_width*D_height*sizeof(float)); //allocate output x image in GPU
+cudaMalloc((void**) &d_D2,D_width*D_height*sizeof(float)); //allocate output y image in GPU
+cudaMemcpy(d_D1, D1, width*D_height*sizeof(float), cudaMemcpyHostToDevice); //copy input image to GPU
+cudaMemcpy(d_D2, D2, width*D_height*sizeof(float), cudaMemcpyHostToDevice); //copy input image to GPU
+
+/******************GPU kernel ***************/
+dim3 threadsPerBlock(16,16,1);
+dim3 numBlocks( width/16, D_height/16,1); 
+leftRightConsistencyCheckKernel<<<numBlocks , threadsPerBlock>>>(d_D1,d_D2,D_width,D_height);
+cudaMemcpy(D1, d_D1,width*D_height*sizeof(float), cudaMemcpyDeviceToHost);
+cudaMemcpy(D2, d_D2,width*D_height*sizeof(float), cudaMemcpyDeviceToHost);
+  // release memory
+ // free(D1_copy);
+  //free(D2_copy);
+  cudaFree(d_D1);
+  cudaFree(d_D1);
 }
