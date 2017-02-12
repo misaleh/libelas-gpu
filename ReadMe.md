@@ -31,9 +31,16 @@ the methods where converted to public to allow for the testing and comparison of
     - `./libelas_gpu`
     
 ## In this fork
+
+* This fork focus mainly on improvement of GPU implementaion of the algorithm. 
+
 * Added opencv mat support with GPU (can be ported easliy to CPU), so you can read, wirte matrices and make further processing using opencv APIs.
 
 * Changed default parameters to MIDDLEBURY as it produces better output.
+
+* Implemented `leftRightConsistencyCheck` on GPU
+
+* Implemented Sobel filter on GPU
 
 * To build the GPU code with the new changes just type `make` in the terminal 
 
