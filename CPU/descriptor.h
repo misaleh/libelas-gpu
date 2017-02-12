@@ -22,7 +22,10 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA
 // NOTE: This descripter is a sparse approximation to the 50-dimensional
 // descriptor described in the paper. It produces similar results, but
 // is faster to compute.
-
+/*
+Edited by: Mostafa A.Saleh
+moustafa.i.saleh <at> gmail.com
+*/
 #ifndef __DESCRIPTOR_H__
 #define __DESCRIPTOR_H__
 
@@ -63,7 +66,6 @@ private:
 
   // build descriptor I_desc from I_du and I_dv
   void createDescriptor(uint8_t* I_du,uint8_t* I_dv,int32_t width,int32_t height,int32_t bpl,bool half_resolution);
-
 };
 
 #endif
