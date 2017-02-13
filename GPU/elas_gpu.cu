@@ -2,6 +2,7 @@
 /*
 Edited by: Mostafa A.Saleh
 moustafa.i.saleh <at> gmail.com 
+remove DEBUG
 */
 
 #include "elas_gpu.h"
@@ -11,6 +12,16 @@ moustafa.i.saleh <at> gmail.com
         cudaError_t __cudaCalloc_err = cudaMalloc(A, B*C); \
         if (__cudaCalloc_err == cudaSuccess) cudaMemset(*A, 0, B*C); \
     } while (0)
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
 
 using namespace std;
 
@@ -366,7 +377,6 @@ __global__ void adaptiveMeanGPU8 (float* D, int32_t D_width, int32_t D_height) {
  */
 void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<triangle> tri, int32_t* disparity_grid, int32_t *grid_dims,
                                 uint8_t* I1_desc, uint8_t* I2_desc, bool right_image, float* D) {
-
   // number of disparities
   const int32_t disp_num  = grid_dims[0]-1;
   
@@ -613,8 +623,7 @@ void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<tr
   delete valids;
 
   // Free big memory
-  cudaFree(d_u_vals);
-  cudaFree(d_v_vals);
+
   cudaFree(d_planes_a);
   cudaFree(d_planes_b);
   cudaFree(d_planes_c);
@@ -628,6 +637,7 @@ void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<tr
   cudaFree(d_grid_dims);
   cudaFree(d_u_vals);
   cudaFree(d_v_vals);
+  cudaFree(d_valids);// was missing
 
 }
 
@@ -891,7 +901,7 @@ cudaMemcpy(D2, d_D2,width*D_height*sizeof(float), cudaMemcpyDeviceToHost);
  // free(D1_copy);
   //free(D2_copy);
   cudaFree(d_D1);
-  cudaFree(d_D1);
+  cudaFree(d_D2);
 }
 
 
@@ -907,7 +917,9 @@ void ElasGPU::median (float* D) {
   float  *d_D_temp;
   float * d_D;
   cudaMalloc((void**) &d_D, D_width*D_height*sizeof(float));    
-  cudaCalloc((void**) &d_D_temp,D_width*D_height,sizeof(float)); 
+
+  cudaCalloc( (void**) &d_D_temp,D_width*D_height,sizeof(float)  );
+
   cudaMemcpy(d_D, D, width*D_height*sizeof(float), cudaMemcpyHostToDevice); //copy input image to GPU
   // first step: horizontal median filter
   dim3 threadsPerBlock(16,16,1);
