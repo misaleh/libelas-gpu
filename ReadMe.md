@@ -42,6 +42,8 @@ the methods where converted to public to allow for the testing and comparison of
 
 * Implemented Sobel filter on GPU
 
+* Implemented Median filter on GPU
+
 * To build the GPU code with the new changes just type `make` in the terminal 
 
 * To run type `make run`
