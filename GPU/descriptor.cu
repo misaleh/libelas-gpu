@@ -38,13 +38,13 @@ __global__ void sobelKernel(const uint8_t* d_in, uint8_t* d_out_v, uint8_t* d_ou
   if (x < 3 || x > w || y > h || y < 3)//out of bounds check
     return;
     const int sobel_x[3][3] = {
-        {-1, 0, 1},
-        {-2, 0, 2},
-        {-1, 0, 1}};
+        {-3, 0, 3},
+        {-10, 0, 10},
+        {-3, 0, 3}};
     const int sobel_y[3][3]  = {
-        {-1,   -2,   -1},
+        {-3,   -10,   -3},
         {0,   0,   0},
-        {1,  2,  1}};
+        {3,  10,  3}};
     int16_t magnitude_x = 0 ,magnitude_y = 0 ;
     for (int16_t j = -1; j <= 1; ++j) {
         for (int16_t i = -1; i <= 1; ++i) {
@@ -83,8 +83,8 @@ Descriptor::Descriptor(uint8_t* I,int32_t width,int32_t height,int32_t bpl,bool 
   uint8_t* I_du = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
   uint8_t* I_dv = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
   //Filter call so sobel filter to get lines better
-  //filter::sobel3x3(I,I_du,I_dv,bpl,height);
-  sobelGPU(I,I_du,I_dv,width,height);
+ // filter::sobel3x3(I,I_du,I_dv,bpl,height);
+   sobelGPU(I,I_du,I_dv,width,height);//fliped
   //Create 16 byte discriptors for each deep image pixel
  
   createDescriptor(I_du,I_dv,width,height,bpl,half_resolution);
