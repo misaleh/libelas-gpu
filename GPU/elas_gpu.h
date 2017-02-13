@@ -11,11 +11,10 @@
 #include <stdint.h>
 #include <functional>  
 
-#include "../elas.h"
+#include "../CPU/elas.h"
 #include "../CPU/descriptor.h"
 #include "../CPU/triangle.h"
 #include "../CPU/matrix.h"
-
 
 /**
  * Our ElasGPU class with all cuda implementations
@@ -39,6 +38,7 @@ public:
                         uint8_t* I1_desc,uint8_t* I2_desc,bool right_image,float* D);
   void leftRightConsistencyCheck(float* D1,float* D2);
   void adaptiveMean (float* D);
+  void median (float* D);
 };
 
 

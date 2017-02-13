@@ -1,4 +1,16 @@
+
+/*
+Edited by: Mostafa A.Saleh
+moustafa.i.saleh <at> gmail.com 
+*/
+
 #include "elas_gpu.h"
+
+#define cudaCalloc(A, B, C) \
+    do { \
+        cudaError_t __cudaCalloc_err = cudaMalloc(A, B*C); \
+        if (__cudaCalloc_err == cudaSuccess) cudaMemset(*A, 0, B*C); \
+    } while (0)
 
 using namespace std;
 
@@ -13,6 +25,39 @@ __device__ uint32_t getAddressOffsetGrid_GPU (const int32_t& x,const int32_t& y,
 /**
  * CUDA Kernel for computing the match for a single UV coordinate
  */
+
+__global__ void medianKernel(float* D,float*D_temp,int32_t D_width,int32_t D_height)
+{
+  int v = blockIdx.y * blockDim.y + threadIdx.y;
+  int u = blockIdx.x * blockDim.x + threadIdx.x;
+  char tmp;
+  unsigned char tempvalues[9] = {0,0,0,0,0,0,0,0,0};  
+
+  if((v==0) || (u==0) || (v==D_height-1) || (u==D_width-1))
+  {
+        D_temp[v*D_width+u] = 0;  
+        return;    
+  }
+  else {
+    for (int x = 0; x < 3; x++) { 
+      for (int y = 0; y < 3; y++){
+        tempvalues[x*3+y] = D[(v+x-1)*D_width+(u+y-1)];  //save each pixel 
+      }
+    }
+    //sort
+    for (int i = 0; i < 9; i++) {
+      for (int j = i + 1; j < 9; j++) {
+        if (tempvalues[i] > tempvalues[j]) { 
+          tmp = tempvalues[i];
+          tempvalues[i] = tempvalues[j];
+          tempvalues[j] = tmp;
+        }
+      }
+    }
+    D_temp[v*D_width+u] = tempvalues[4];   //the middel value
+}
+
+}
 __global__ void leftRightConsistencyCheckKernel(float* D1,float* D2, int32_t D_width,int32_t D_height)
 {
 
@@ -325,7 +370,7 @@ void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<tr
   // number of disparities
   const int32_t disp_num  = grid_dims[0]-1;
   
-  // descriptor window_size
+  // descriptor width-window_size
   int32_t window_size = 2;
   
   // init disparity image to -10
@@ -480,8 +525,8 @@ void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<tr
   }
     
   // Debug
-  cout << "Original Size: " << size_grid << endl;
-  cout << "Total Size: " << size_total << endl;
+  //cout << "Original Size: " << size_grid << endl;
+  //cout << "Total Size: " << size_total << endl;
 
   // Calculate size of kernel
   int block_size = 32;
@@ -548,13 +593,14 @@ void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<tr
   findMatch_GPU<<<DimGrid, DimBlock>>>(d_u_vals, d_v_vals, size_total, d_planes_a, d_planes_b, d_planes_c,
                                         d_disparity_grid, d_grid_dims, d_I1, d_I2, d_P, plane_radius,
                                         width, height, d_valids, right_image, d_D);
-    
+      
+
   // Sync after the kernel is launched
   cudaDeviceSynchronize();
 
   // Copy the final disparity values back over
   cudaMemcpy(D, d_D, width*height*sizeof(float), cudaMemcpyDeviceToHost);
-  
+
   // Free local memory
   delete[] P;
 
@@ -835,7 +881,7 @@ cudaMalloc((void**) &d_D2,D_width*D_height*sizeof(float)); //allocate output y i
 cudaMemcpy(d_D1, D1, width*D_height*sizeof(float), cudaMemcpyHostToDevice); //copy input image to GPU
 cudaMemcpy(d_D2, D2, width*D_height*sizeof(float), cudaMemcpyHostToDevice); //copy input image to GPU
 
-/******************GPU kernel ***************/
+
 dim3 threadsPerBlock(16,16,1);
 dim3 numBlocks( width/16, D_height/16,1); 
 leftRightConsistencyCheckKernel<<<numBlocks , threadsPerBlock>>>(d_D1,d_D2,D_width,D_height);
@@ -847,3 +893,32 @@ cudaMemcpy(D2, d_D2,width*D_height*sizeof(float), cudaMemcpyDeviceToHost);
   cudaFree(d_D1);
   cudaFree(d_D1);
 }
+
+
+void ElasGPU::median (float* D) {
+
+  int32_t D_width          = width;
+  int32_t D_height         = height;
+
+  //float *D_temp = (float*)calloc(D_width*D_height,sizeof(float));
+  //float *vals = new float[window_size*2+1];
+  int32_t window_size = 3;
+
+  float  *d_D_temp;
+  float * d_D;
+  cudaMalloc((void**) &d_D, D_width*D_height*sizeof(float));    
+  cudaCalloc((void**) &d_D_temp,D_width*D_height,sizeof(float)); 
+  cudaMemcpy(d_D, D, width*D_height*sizeof(float), cudaMemcpyHostToDevice); //copy input image to GPU
+  // first step: horizontal median filter
+  dim3 threadsPerBlock(16,16,1);
+  dim3 numBlocks( width/16, D_height/16,1); 
+  medianKernel<<<numBlocks , threadsPerBlock>>>(d_D,d_D_temp,D_width,D_height);
+
+  cudaMemcpy(D, d_D_temp,width*D_height*sizeof(float), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_D_temp);
+  cudaFree(d_D);
+
+}
+
+
