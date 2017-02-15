@@ -6,7 +6,7 @@
 #include <opencv2/core/core.hpp>
 
 #include <iostream>
-#include "elas.h"
+#include "CPU/elas.h"
 #include "GPU/elas_gpu.h"
 #include "CPU/image.h"
 
@@ -24,9 +24,9 @@ int main(int argc, char** argv) {
   Elas::parameters param;
  param.postprocess_only_left = false;
  ElasGPU elas(param);
-
-  Mat leftim=imread("input/cones_left.pgm",CV_LOAD_IMAGE_GRAYSCALE);
-  Mat rightim=imread("input/cones_right.pgm",CV_LOAD_IMAGE_GRAYSCALE);
+ cv::Mat dst;
+  Mat leftim=imread("I1_000606.png",CV_LOAD_IMAGE_GRAYSCALE);
+  Mat rightim=imread("I2_000606.png",CV_LOAD_IMAGE_GRAYSCALE);
   
   // get image width and height
   int32_t width  = leftim.cols;
@@ -39,11 +39,15 @@ int main(int argc, char** argv) {
   elas.process(leftim.data,rightim.data,D1_data,D2_data,dims);
 
   Mat L1(height, width,CV_32FC1,D1_data);
-  Mat R(height, width,CV_32FC1,D2_data);
-  normalize(L1, L1, 0, 255, NORM_MINMAX, CV_8U); //to view it
-  applyColorMap(L1, colormap, COLORMAP_JET);  //to make it colored
-	  imshow("disp",colormap);
-  waitKey(0);
+  normalize(L1, colormap, 0, 255, NORM_MINMAX, CV_8U); //to view it
+  applyColorMap(colormap, colormap, COLORMAP_JET);  //to make it colored
+  adaptiveBilateralFilter(colormap,dst, cv::Size(11, 11), 50 );
+
+  //applyColorMap(L1, colormap, COLORMAP_JET);  //to make it colored
+	 // imshow("disp",colormap);
+    imwrite("Disparityn.png",dst);
+    imwrite("Disparity.png",L1);
+  //waitKey(0);
   free(D1_data);
   free(D2_data);
 

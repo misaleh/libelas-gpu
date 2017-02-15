@@ -37,8 +37,8 @@ void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t*
   bpl    = width + 15-(width-1)%16;
   
   // copy images to byte aligned memory
-  I1 = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
-  I2 = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
+  I1 = (uint8_t*)malloc(bpl*height*sizeof(uint8_t)); //was mm malloc 16
+  I2 = (uint8_t*)malloc(bpl*height*sizeof(uint8_t)); // was mm malloc 16
   memset (I1,0,bpl*height*sizeof(uint8_t));
   memset (I2,0,bpl*height*sizeof(uint8_t));
   if (bpl==dims[2]) {
@@ -67,8 +67,8 @@ void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t*
   // if not enough support points for triangulation
   if (p_support.size()<3) {
     cout << "ERROR: Need at least 3 support points!" << endl;
-    _mm_free(I1);
-    _mm_free(I2);
+    free(I1); // was _mm_free
+    free(I2);//was _mm_free
     return;
   }
 
@@ -148,8 +148,8 @@ void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t*
   // release memory
   free(disparity_grid_1);
   free(disparity_grid_2);
-  _mm_free(I1);
-  _mm_free(I2);
+  free(I1);//was mm_free
+  free(I2);//was mm_free
 }
 
 /*
@@ -301,8 +301,8 @@ inline int16_t Elas::computeMatchingDisparity (const int32_t &u,const int32_t &v
   int32_t desc_offset_3 = -16*u_step+16*width*v_step;
   int32_t desc_offset_4 = +16*u_step+16*width*v_step;
   
-  __m128i xmm1,xmm2,xmm3,xmm4,xmm5,xmm6;
-
+ // __m128i xmm1,xmm2,xmm3,xmm4,xmm5,xmm6;
+  uint8_t *mm1,*mm2,*mm3,*mm4,*mm5,*mm6,*mmtmp;
   // check if we are inside the image region
   if (u>=window_size+u_step && u<=width-window_size-1-u_step && v>=window_size+v_step && v<=height-window_size-1-v_step) {
     
@@ -323,7 +323,7 @@ inline int16_t Elas::computeMatchingDisparity (const int32_t &u,const int32_t &v
     
     // we require at least some texture
     // Sum intensity values around the candidate
-    int32_t sum = 0;
+    int32_t sum = 0,sum1 = 0;
     for (int32_t i=0; i<16; i++)
       sum += abs((int32_t)(*(I1_block_addr+i))-128); //TODO: Why subtract 128
     //If our candidate had a texture below a threshold (Aka not a line) dont use it
@@ -331,11 +331,24 @@ inline int16_t Elas::computeMatchingDisparity (const int32_t &u,const int32_t &v
       return -1;
     
     // load first blocks to xmm registers (Loading corning registers)
-    xmm1 = _mm_load_si128((__m128i*)(I1_block_addr+desc_offset_1));
+  /*  xmm1 = _mm_load_si128((__m128i*)(I1_block_addr+desc_offset_1));
     xmm2 = _mm_load_si128((__m128i*)(I1_block_addr+desc_offset_2));
     xmm3 = _mm_load_si128((__m128i*)(I1_block_addr+desc_offset_3));
-    xmm4 = _mm_load_si128((__m128i*)(I1_block_addr+desc_offset_4));
-    
+    xmm4 = _mm_load_si128((__m128i*)(I1_block_addr+desc_offset_4));*/
+    mm1 = (uint8_t*)malloc(16*sizeof(uint8_t));// 16 * 8 bit array
+    mm2 = (uint8_t*)malloc(16*sizeof(uint8_t));
+    mm3 = (uint8_t*)malloc(16*sizeof(uint8_t));
+    mm4 = (uint8_t*)malloc(16*sizeof(uint8_t));
+    mm5 = (uint8_t*)malloc(16*sizeof(uint8_t));
+    mm6 = (uint8_t*)malloc(16*sizeof(uint8_t));
+    mmtmp = (uint8_t*)malloc(16*sizeof(uint8_t));
+    memcpy(mm1,(I1_block_addr+desc_offset_1),16*sizeof(uint8_t)); //copy 128 bit
+    memcpy(mm2,(I1_block_addr+desc_offset_2),16*sizeof(uint8_t));
+    memcpy(mm3,(I1_block_addr+desc_offset_3),16*sizeof(uint8_t));
+    memcpy(mm4,(I1_block_addr+desc_offset_4),16*sizeof(uint8_t));
+
+    uint16_t val = 0 ;
+    uint32_t val1 = 0;
     // declare match energy for each disparity
     int32_t u_warp;
     
@@ -370,7 +383,7 @@ inline int16_t Elas::computeMatchingDisparity (const int32_t &u,const int32_t &v
 
       // compute match energy at this disparity
       // Sum all the intensity differences of all the surrounding canditates between the first I1 and second I2 inages 
-      xmm6 = _mm_load_si128((__m128i*)(I2_block_addr+desc_offset_1)); // Get NE candidate from image 2
+     /* xmm6 = _mm_load_si128((__m128i*)(I2_block_addr+desc_offset_1)); // Get NE candidate from image 2
       //_mm_sad_epu8 sums the difference of the first 64 bytes and second 64 bytes (returns 2 values)
       xmm6 = _mm_sad_epu8(xmm1,xmm6); //Subtract the two values from image 1 and image 2
       xmm5 = _mm_load_si128((__m128i*)(I2_block_addr+desc_offset_2));// Get NW candidate from image 2
@@ -379,8 +392,71 @@ inline int16_t Elas::computeMatchingDisparity (const int32_t &u,const int32_t &v
       xmm6 = _mm_add_epi16(_mm_sad_epu8(xmm3,xmm5),xmm6);
       xmm5 = _mm_load_si128((__m128i*)(I2_block_addr+desc_offset_4));// Get SW candidate from image 2
       xmm6 = _mm_add_epi16(_mm_sad_epu8(xmm4,xmm5),xmm6);
-      sum  = _mm_extract_epi16(xmm6,0)+_mm_extract_epi16(xmm6,4); //Sum all the differences
+     sum1  = _mm_extract_epi16(xmm6,0)+_mm_extract_epi16(xmm6,4); //Sum all the differences*/
+//equivalent to  _mm_load
+  memcpy(mm6,(I2_block_addr+desc_offset_1),16*sizeof(uint8_t));
+//equivalent to sad
+  val = 0;
+  for(int j=0; j<16; j++){ 
+             val += (uint16_t)abs((uint8_t)(*(uint8_t*)(mm1+j)) - (uint8_t)(*(uint8_t*)(mm6+j)));
+        }
+  *(uint16_t*)mm6 = val ;
+  for(int j =2;j < 16;j++) //from bit 16 to 128
+    mm6[j] = 0 ;
+//equivalent to load
+  memcpy(mm5,(I2_block_addr+desc_offset_2),16*sizeof(uint8_t));
+//equivalent to first sad argument 
+  val = 0;
+  for(int j=0; j<16; j++){ 
+             val += (uint16_t)abs((uint8_t)(*(uint8_t*)(mm2+j)) - (uint8_t)(*(uint8_t*)(mm5+j)));
+        }
+  *(uint16_t*)mmtmp = val ;
+  for(int j =2;j < 16;j++) //from bit 16 to 128
+    mmtmp[j] = 0 ;
+//equivalent to add
+  val1 = 0;
+  val = 0;
+  for(int j=0; j<8; j = j+2){ //alternative for add
+            *((uint16_t*)(mm6+j))  = (uint16_t)((uint16_t)(*(uint16_t*)(mmtmp+j)) + (uint16_t)(*(uint16_t*)(mm6+j))) ;
+        }
 
+//equivalent to load
+  memcpy(mm5,(I2_block_addr+desc_offset_3),16*sizeof(uint8_t));
+//equivalent to first sad argument
+  val = 0;
+  for(int j=0; j<16; j++){ 
+             val += (uint16_t)abs((uint8_t)(*(uint8_t*)(mm3+j)) - (uint8_t)(*(uint8_t*)(mm5+j)));
+        }
+  *(uint16_t*)mmtmp = val ;
+  for(int j =2;j < 16;j++) //from bit 16 to 128
+    mmtmp[j] = 0 ;
+// equivalent to add
+  val = 0;
+  val1=0;
+  for(int j=0; j<8; j = j+2){ //alternative for add
+           (*(uint16_t*)(mm6+j)) = (uint16_t)((uint16_t)(*(uint16_t*)(mmtmp+j)) + (uint16_t)(*(uint16_t*)(mm6+j)));
+        }
+
+ 
+//equivalent to load
+  memcpy(mm5,(I2_block_addr+desc_offset_4),16*sizeof(uint8_t));
+//equivalent to first sad argument
+  val = 0;
+  for(int j=0; j<16; j++){ 
+             val += (uint16_t)abs((uint8_t)(*(uint8_t*)(mm4+j)) - (uint8_t)(*(uint8_t*)(mm5+j)));
+        }
+  *(uint16_t*)mmtmp = val ;
+  for(int j =2;j < 16;j++) //from bit 16 to 128
+    mmtmp[j] = 0 ;
+//equivalent to add
+  val = 0;
+  val1 = 0;
+  for(int j=0; j<8; j = j+2){ //alternative for add
+             (*(uint16_t*)(mm6+j)) = (uint16_t)((uint16_t)(*(uint16_t*)(mmtmp+j)) + (uint16_t)(*(uint16_t*)(mm6+j)));
+        }
+
+  
+  sum = *(uint16_t*)mm6 + *(uint16_t*)(mm6+9); //was + 4 
       // best + second best match
       //(Smaller sum = better match)
       if (sum<min_1_E) {
@@ -394,6 +470,13 @@ inline int16_t Elas::computeMatchingDisparity (const int32_t &u,const int32_t &v
       }
     }
 
+free(mm1);
+free(mm2);
+free(mm3);
+free(mm4);
+free(mm5);
+free(mm6);
+free(mmtmp);
     // check if best and second best match are available and if matching ratio is sufficient
     // Threshold says the second is within the 95th percentile of the first
     if (min_1_d>=0 && min_2_d>=0 && (float)min_1_E<param.support_threshold*(float)min_2_E)
@@ -710,126 +793,12 @@ void Elas::createGrid(vector<support_pt> p_support,int32_t* disparity_grid,int32
   free(temp2);
 }
 
-inline void Elas::updatePosteriorMinimum(__m128i* I2_block_addr,const int32_t &d,const int32_t &w,
-                                         const __m128i &xmm1,__m128i &xmm2,int32_t &val,int32_t &min_val,int32_t &min_d) {
-  xmm2 = _mm_load_si128(I2_block_addr);
-  xmm2 = _mm_sad_epu8(xmm1,xmm2);
-  val  = _mm_extract_epi16(xmm2,0)+_mm_extract_epi16(xmm2,4)+w;
-  if (val<min_val) {
-    min_val = val;
-    min_d   = d;
-  }
-}
-
-inline void Elas::updatePosteriorMinimum(__m128i* I2_block_addr,const int32_t &d,
-                                         const __m128i &xmm1,__m128i &xmm2,int32_t &val,int32_t &min_val,int32_t &min_d) {
-  xmm2 = _mm_load_si128(I2_block_addr);
-  xmm2 = _mm_sad_epu8(xmm1,xmm2);
-  val  = _mm_extract_epi16(xmm2,0)+_mm_extract_epi16(xmm2,4);
-  if (val<min_val) {
-    min_val = val;
-    min_d   = d;
-  }
-}
 
 inline void Elas::findMatch(int32_t &u,int32_t &v,float &plane_a,float &plane_b,float &plane_c,
                             int32_t* disparity_grid,int32_t *grid_dims,uint8_t* I1_desc,uint8_t* I2_desc,
                             int32_t *P,int32_t &plane_radius,bool &valid,bool &right_image,float* D){
   
-  // get image width and height
-  const int32_t disp_num    = grid_dims[0]-1;
-  const int32_t window_size = 2;
-
-  // address of disparity we want to compute
-  uint32_t d_addr;
-  if (param.subsampling) d_addr = getAddressOffsetImage(u/2,v/2,width/2);
-  else                   d_addr = getAddressOffsetImage(u,v,width);
-  
-  // check if u is ok
-  if (u<window_size || u>=width-window_size)
-    return;
-
-  // compute line start address
-  int32_t  line_offset = 16*width*max(min(v,height-3),2);
-  uint8_t *I1_line_addr,*I2_line_addr;
-  if (!right_image) {
-    I1_line_addr = I1_desc+line_offset;
-    I2_line_addr = I2_desc+line_offset;
-  } else {
-    I1_line_addr = I2_desc+line_offset;
-    I2_line_addr = I1_desc+line_offset;
-  }
-
-  // compute I1 block start address
-  uint8_t* I1_block_addr = I1_line_addr+16*u;
-  
-  // does this patch have enough texture?
-  int32_t sum = 0;
-  for (int32_t i=0; i<16; i++)
-    sum += abs((int32_t)(*(I1_block_addr+i))-128);
-  if (sum<param.match_texture)
-    return;
-
-  // compute disparity, min disparity and max disparity of plane prior
-  int32_t d_plane     = (int32_t)(plane_a*(float)u+plane_b*(float)v+plane_c);
-  int32_t d_plane_min = max(d_plane-plane_radius,0);
-  int32_t d_plane_max = min(d_plane+plane_radius,disp_num-1);
-
-  // get grid pointer
-  int32_t  grid_x    = (int32_t)floor((float)u/(float)param.grid_size);
-  int32_t  grid_y    = (int32_t)floor((float)v/(float)param.grid_size);
-  uint32_t grid_addr = getAddressOffsetGrid(grid_x,grid_y,0,grid_dims[1],grid_dims[0]);  
-  int32_t  num_grid  = *(disparity_grid+grid_addr);
-  int32_t* d_grid    = disparity_grid+grid_addr+1;
-  
-  // loop variables
-  int32_t d_curr, u_warp, val;
-  int32_t min_val = 10000;
-  int32_t min_d   = -1;
-  __m128i xmm1    = _mm_load_si128((__m128i*)I1_block_addr);
-  __m128i xmm2;
-
-  // left image
-  if (!right_image) { 
-    for (int32_t i=0; i<num_grid; i++) {
-      d_curr = d_grid[i];
-      if (d_curr<d_plane_min || d_curr>d_plane_max) { //If the current disparity is out of the planes range
-        u_warp = u-d_curr;
-        if (u_warp<window_size || u_warp>=width-window_size)
-          continue;
-        updatePosteriorMinimum((__m128i*)(I2_line_addr+16*u_warp),d_curr,xmm1,xmm2,val,min_val,min_d);
-      }
-    }
-    //disparity inside the grid
-    for (d_curr=d_plane_min; d_curr<=d_plane_max; d_curr++) {
-      u_warp = u-d_curr;
-      if (u_warp<window_size || u_warp>=width-window_size)
-        continue;
-      updatePosteriorMinimum((__m128i*)(I2_line_addr+16*u_warp),d_curr,valid?*(P+abs(d_curr-d_plane)):0,xmm1,xmm2,val,min_val,min_d);
-    }
     
-  // right image
-  } else {
-    for (int32_t i=0; i<num_grid; i++) {
-      d_curr = d_grid[i];
-      if (d_curr<d_plane_min || d_curr>d_plane_max) {
-        u_warp = u+d_curr;
-        if (u_warp<window_size || u_warp>=width-window_size)
-          continue;
-        updatePosteriorMinimum((__m128i*)(I2_line_addr+16*u_warp),d_curr,xmm1,xmm2,val,min_val,min_d);
-      }
-    }
-    for (d_curr=d_plane_min; d_curr<=d_plane_max; d_curr++) {
-      u_warp = u+d_curr;
-      if (u_warp<window_size || u_warp>=width-window_size)
-        continue;
-      updatePosteriorMinimum((__m128i*)(I2_line_addr+16*u_warp),d_curr,valid?*(P+abs(d_curr-d_plane)):0,xmm1,xmm2,val,min_val,min_d);
-    }
-  }
-
-  // set disparity value
-  if (min_d>=0) *(D+d_addr) = min_d; // MAP value (min neg-Log probability)
-  else          *(D+d_addr) = -1;    // invalid disparity
 }
 
 // TODO: %2 => more elegantly
@@ -1343,228 +1312,7 @@ void Elas::gapInterpolation(float* D) {
 
 // implements approximation to bilateral filtering
 void Elas::adaptiveMean (float* D) {
-  
-  // get disparity image dimensions
-  int32_t D_width          = width;
-  int32_t D_height         = height;
-  if (param.subsampling) {
-    D_width          = width/2;
-    D_height         = height/2;
-  }
-  
-  // allocate temporary memory
-  float* D_copy = (float*)malloc(D_width*D_height*sizeof(float));
-  float* D_tmp  = (float*)malloc(D_width*D_height*sizeof(float));
-  memcpy(D_copy,D,D_width*D_height*sizeof(float));
-  
-  // zero input disparity maps to -10 (this makes the bilateral
-  // weights of all valid disparities to 0 in this region)
-  for (int32_t i=0; i<D_width*D_height; i++) {
-    if (*(D+i)<0) {
-      *(D_copy+i) = -10;
-      *(D_tmp+i)  = -10;
-    }
-  }
-  
-  __m128 xconst0 = _mm_set1_ps(0);
-  __m128 xconst4 = _mm_set1_ps(4);
-  __m128 xval,xweight1,xweight2,xfactor1,xfactor2;
-  
-  float *val     = (float *)_mm_malloc(8*sizeof(float),16);
-  float *weight  = (float*)_mm_malloc(4*sizeof(float),16);
-  float *factor  = (float*)_mm_malloc(4*sizeof(float),16);
-  
-  // set absolute mask
-  __m128 xabsmask = _mm_set1_ps(0x7FFFFFFF);
-  
-  // when doing subsampling: 4 pixel bilateral filter width
-  if (param.subsampling) {
-  
-    // horizontal filter
-    for (int32_t v=3; v<D_height-3; v++) {
-
-      // init
-      for (int32_t u=0; u<3; u++)
-        val[u] = *(D_copy+v*D_width+u);
-
-      // loop
-      for (int32_t u=3; u<D_width; u++) {
-
-        // set
-        float val_curr = *(D_copy+v*D_width+(u-1));
-        val[u%4] = *(D_copy+v*D_width+u);
-
-        xval     = _mm_load_ps(val);      
-        xweight1 = _mm_sub_ps(xval,_mm_set1_ps(val_curr));
-        xweight1 = _mm_and_ps(xweight1,xabsmask);
-        xweight1 = _mm_sub_ps(xconst4,xweight1);
-        xweight1 = _mm_max_ps(xconst0,xweight1);
-        xfactor1 = _mm_mul_ps(xval,xweight1);
-
-        _mm_store_ps(weight,xweight1);
-        _mm_store_ps(factor,xfactor1);
-
-        float weight_sum = weight[0]+weight[1]+weight[2]+weight[3];
-        float factor_sum = factor[0]+factor[1]+factor[2]+factor[3];
-        
-        if (weight_sum>0) {
-          float d = factor_sum/weight_sum;
-          if (d>=0) *(D_tmp+v*D_width+(u-1)) = d;
-        }
-      }
-    }
-
-    // vertical filter
-    for (int32_t u=3; u<D_width-3; u++) {
-
-      // init
-      for (int32_t v=0; v<3; v++)
-        val[v] = *(D_tmp+v*D_width+u);
-
-      // loop
-      for (int32_t v=3; v<D_height; v++) {
-
-        // set
-        float val_curr = *(D_tmp+(v-1)*D_width+u);
-        val[v%4] = *(D_tmp+v*D_width+u);
-
-        xval     = _mm_load_ps(val);      
-        xweight1 = _mm_sub_ps(xval,_mm_set1_ps(val_curr));
-        xweight1 = _mm_and_ps(xweight1,xabsmask);
-        xweight1 = _mm_sub_ps(xconst4,xweight1);
-        xweight1 = _mm_max_ps(xconst0,xweight1);
-        xfactor1 = _mm_mul_ps(xval,xweight1);
-
-        _mm_store_ps(weight,xweight1);
-        _mm_store_ps(factor,xfactor1);
-
-        float weight_sum = weight[0]+weight[1]+weight[2]+weight[3];
-        float factor_sum = factor[0]+factor[1]+factor[2]+factor[3];
-        
-        if (weight_sum>0) {
-          float d = factor_sum/weight_sum;
-          if (d>=0) *(D+(v-1)*D_width+u) = d;
-        }
-      }
-    }
-    
-  // full resolution: 8 pixel bilateral filter width
-  // D(x) = sum(I(x)*f(I(xi)-I(x))*g(xi-x))/W(x)
-  // W(x) = sum(f(I(xi)-I(x))*g(xi-x))
-  // g(xi-x) = 1
-  // f(I(xi)-I(x)) = 4-(I(xi)-I(x)) if greater than 0, 0 otherwise
-  } else {
-    
-    // horizontal filter
-    for (int32_t v=3; v<D_height-3; v++) {
-
-      // Preload first 7 pixels in row
-      for (int32_t u=0; u<7; u++)
-        val[u] = *(D_copy+v*D_width+u);
-
-      // Loop through remainer of the row
-      for (int32_t u=7; u<D_width; u++) {
-
-        // Current pixel being filtered is middle of our set (3 back)
-        //Note this isn't truely the center since we have 8 for the vestor registers
-        float val_curr = *(D_copy+v*D_width+(u-3));
-        // Update the most outdated (farthest away) pixel of our 8
-        val[u%8] = *(D_copy+v*D_width+u);
-
-        //Process first 4 pixels
-        xval     = _mm_load_ps(val);
-        xweight1 = _mm_sub_ps(xval,_mm_set1_ps(val_curr));
-        //Mask UNSAFE use alternative
-        //xweight1 = _mm_and_ps(xweight1,xabsmask);
-        xweight1 = _mm_max_ps(_mm_sub_ps(_mm_setzero_ps(), xweight1), xweight1);
-        xweight1 = _mm_sub_ps(xconst4,xweight1);
-        xweight1 = _mm_max_ps(xconst0,xweight1);
-        xfactor1 = _mm_mul_ps(xval,xweight1);
-
-        //Process next 4 pixels
-        xval     = _mm_load_ps(val+4);      
-        xweight2 = _mm_sub_ps(xval,_mm_set1_ps(val_curr));
-        //Mask UNSAFE use alternative
-        //xweight2 = _mm_and_ps(xweight2,xabsmask);
-        xweight2 = _mm_max_ps(_mm_sub_ps(_mm_setzero_ps(), xweight2), xweight2);
-        xweight2 = _mm_sub_ps(xconst4,xweight2);
-        xweight2 = _mm_max_ps(xconst0,xweight2);
-        xfactor2 = _mm_mul_ps(xval,xweight2);
-
-        //sum up factor and weight
-        xweight1 = _mm_add_ps(xweight1,xweight2);
-        xfactor1 = _mm_add_ps(xfactor1,xfactor2);
-
-        //Pull out factor and weight from vector registers
-        _mm_store_ps(weight,xweight1);
-        _mm_store_ps(factor,xfactor1);
-
-        //Sum it up
-        float weight_sum = weight[0]+weight[1]+weight[2]+weight[3];
-        float factor_sum = factor[0]+factor[1]+factor[2]+factor[3];
-        
-        if (weight_sum>0) {
-          float d = factor_sum/weight_sum;
-          if (d>=0) *(D_tmp+v*D_width+(u-3)) = d;
-        }
-      }
-    }
-  
-    // vertical filter
-    for (int32_t u=3; u<D_width-3; u++) {
-
-      // init
-      for (int32_t v=0; v<7; v++)
-        val[v] = *(D_tmp+v*D_width+u);
-
-      // loop
-      for (int32_t v=7; v<D_height; v++) {
-
-        // set
-        float val_curr = *(D_tmp+(v-3)*D_width+u);
-        val[v%8] = *(D_tmp+v*D_width+u);
-
-        xval     = _mm_load_ps(val);      
-        xweight1 = _mm_sub_ps(xval,_mm_set1_ps(val_curr));
-        //Mask UNSAFE use alternative
-        //xweight1 = _mm_and_ps(xweight1,xabsmask);
-        xweight1 = _mm_max_ps(_mm_sub_ps(_mm_setzero_ps(), xweight1), xweight1);
-        xweight1 = _mm_sub_ps(xconst4,xweight1);
-        xweight1 = _mm_max_ps(xconst0,xweight1);
-        xfactor1 = _mm_mul_ps(xval,xweight1);
-
-        xval     = _mm_load_ps(val+4);      
-        xweight2 = _mm_sub_ps(xval,_mm_set1_ps(val_curr));
-        //Mask UNSAFE use alternative
-        //xweight2 = _mm_and_ps(xweight2,xabsmask);
-        xweight2 = _mm_max_ps(_mm_sub_ps(_mm_setzero_ps(), xweight2), xweight2);
-        xweight2 = _mm_sub_ps(xconst4,xweight2);
-        xweight2 = _mm_max_ps(xconst0,xweight2);
-        xfactor2 = _mm_mul_ps(xval,xweight2);
-
-        xweight1 = _mm_add_ps(xweight1,xweight2);
-        xfactor1 = _mm_add_ps(xfactor1,xfactor2);
-
-        _mm_store_ps(weight,xweight1);
-        _mm_store_ps(factor,xfactor1);
-
-        float weight_sum = weight[0]+weight[1]+weight[2]+weight[3];
-        float factor_sum = factor[0]+factor[1]+factor[2]+factor[3];
-        
-        if (weight_sum>0) {
-          float d = factor_sum/weight_sum;
-          if (d>=0) *(D+(v-3)*D_width+u) = d;
-        }
-      }
-    }
-  }
-  
-  // free memory
-  _mm_free(val);
-  _mm_free(weight);
-  _mm_free(factor);
-  free(D_copy);
-  free(D_tmp);
+ 
 }
 
 void Elas::median (float* D) {

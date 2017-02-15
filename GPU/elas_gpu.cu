@@ -643,7 +643,7 @@ void ElasGPU::computeDisparity(std::vector<support_pt> p_support, std::vector<tr
 
 // implements approximation to bilateral filtering
 void ElasGPU::adaptiveMean (float* D) {
-  
+  /*
   // get disparity image dimensions
   int32_t D_width          = width;
   int32_t D_height         = height;
@@ -862,7 +862,7 @@ void ElasGPU::adaptiveMean (float* D) {
           if (d>=0) *(D+(v-3)*D_width+u) = d;
         }
       }
-    }*/
+    } // here was a comment
   }
   
   // free memory
@@ -870,7 +870,7 @@ void ElasGPU::adaptiveMean (float* D) {
   _mm_free(weight);
   _mm_free(factor);
   free(D_copy);
-  free(D_tmp);
+  free(D_tmp);*/
 }
 
 void ElasGPU::leftRightConsistencyCheck(float* D1,float* D2) {

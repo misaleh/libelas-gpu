@@ -18,7 +18,11 @@ You should have received a copy of the GNU General Public License along with
 libelas; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA 
 */
-
+/*
+Edited by: Mostafa A.Saleh
+moustafa.i.saleh <at> gmail.com
+search for [imp] which are important parameters that can enhance quality or run time 
+*/
 // Main header file. Include this to use libelas in your code.
 
 #ifndef __ELAS_H__
@@ -32,7 +36,7 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA
 #include <string.h>
 #include <stdlib.h>
 #include <vector>
-#include <emmintrin.h>
+//#include <emmintrin.h> //SSE not supported in jetson
 
 // define fixed-width datatypes for Visual Studio projects
 #ifndef _MSC_VER
@@ -64,18 +68,18 @@ public:
     int32_t disp_max;               // max disparity
     float   support_threshold;      // max. uniqueness ratio (best vs. second best support match)
     int32_t support_texture;        // min texture for support points
-    int32_t candidate_stepsize;     // step size of regular grid on which support points are matched
+    int32_t candidate_stepsize;     // step size of regular grid on which support points are matched, for commputing disparity (higher -> faster)[imp]
     int32_t incon_window_size;      // window size of inconsistent support point check
     int32_t incon_threshold;        // disparity similarity threshold for support point to be considered consistent
     int32_t incon_min_support;      // minimum number of consistent support points
     bool    add_corners;            // add support points at image corners with nearest neighbor disparities
-    int32_t grid_size;              // size of neighborhood for additional support point extrapolation
+    int32_t grid_size;              // size of neighborhood for additional support point extrapolation [imp]
     float   beta;                   // image likelihood parameter
     float   gamma;                  // prior constant
     float   sigma;                  // prior sigma
     float   sradius;                // prior sigma radius
     int32_t match_texture;          // min texture for dense matching
-    int32_t lr_threshold;           // disparity threshold for left/right consistency check
+    int32_t lr_threshold;           // disparity threshold for left/right consistency check, max error between disparity computed from left and right
     float   speckle_sim_threshold;  // similarity threshold for speckle segmentation
     int32_t speckle_size;           // maximal size of a speckle (small speckles get removed)
     int32_t ipol_gap_width;         // interpolate small gaps (left<->right, top<->bottom)
@@ -94,8 +98,8 @@ public:
       //  and are a bit more robust towards lighting etc.)
       if (s==ROBOTICS) {
         disp_min              = 0;
-        disp_max              = 255;
-        support_threshold     = 0.85;
+        disp_max              = 128;
+        support_threshold     = 0.85f;
         support_texture       = 10;
         candidate_stepsize    = 5;
         incon_window_size     = 5;
@@ -103,7 +107,7 @@ public:
         incon_min_support     = 5;
         add_corners           = 0;
         grid_size             = 20;
-        beta                  = 0.02;
+        beta                  = 0.02f;
         gamma                 = 3;
         sigma                 = 1;
         sradius               = 2;
@@ -111,7 +115,7 @@ public:
         lr_threshold          = 2;
         speckle_sim_threshold = 1;
         speckle_size          = 200;
-        ipol_gap_width        = 3;
+        ipol_gap_width        = 5000;
         filter_median         = 0;
         filter_adaptive_mean  = 1;
         postprocess_only_left = 1;
@@ -121,28 +125,28 @@ public:
       // (interpolate all missing disparities)
       } else {
         disp_min              = 0;
-        disp_max              = 255;
-        support_threshold     = 0.95;
-        support_texture       = 10;
-        candidate_stepsize    = 5;
+        disp_max              = 70;
+        support_threshold     = 0.8;
+        support_texture       = 5;
+        candidate_stepsize    = 5; //nice 5
         incon_window_size     = 5;
         incon_threshold       = 5;
         incon_min_support     = 5;
         add_corners           = 1;
-        grid_size             = 20;
-        beta                  = 0.02;
-        gamma                 = 5;
+        grid_size             = 20; //hardcoded
+        beta                  = 0.005; // nice 0.02
+        gamma                 = 4; // nice 5
         sigma                 = 1;
-        sradius               = 3;
-        match_texture         = 0;
-        lr_threshold          = 2;
-        speckle_sim_threshold = 1;
-        speckle_size          = 200;
+        sradius               = 2;//3
+        match_texture         = 0;  //hardcoded
+        lr_threshold          = 2; //hardcoded
+        speckle_sim_threshold = 1; //hardcoded
+        speckle_size          = 200; //hardcoded
         ipol_gap_width        = 5000;
         filter_median         = 1;
-        filter_adaptive_mean  = 0;
-        postprocess_only_left = 0;
-        subsampling           = 0;
+        filter_adaptive_mean  = 1;
+        postprocess_only_left = 1; 
+        subsampling           = 0; //hardcoded
       }
     }
   };
@@ -205,10 +209,10 @@ public:
   virtual void createGrid (std::vector<support_pt> p_support,int32_t* disparity_grid,int32_t* grid_dims,bool right_image);
 
   // matching
-  inline void updatePosteriorMinimum (__m128i* I2_block_addr,const int32_t &d,const int32_t &w,
-                                      const __m128i &xmm1,__m128i &xmm2,int32_t &val,int32_t &min_val,int32_t &min_d);
-  inline void updatePosteriorMinimum (__m128i* I2_block_addr,const int32_t &d,
-                                      const __m128i &xmm1,__m128i &xmm2,int32_t &val,int32_t &min_val,int32_t &min_d);
+ // inline void updatePosteriorMinimum (__m128i* I2_block_addr,const int32_t &d,const int32_t &w,
+                           //           const __m128i &xmm1,__m128i &xmm2,int32_t &val,int32_t &min_val,int32_t &min_d);
+  //inline void updatePosteriorMinimum (__m128i* I2_block_addr,const int32_t &d,
+                             //         const __m128i &xmm1,__m128i &xmm2,int32_t &val,int32_t &min_val,int32_t &min_d);
   inline void findMatch (int32_t &u,int32_t &v,float &plane_a,float &plane_b,float &plane_c,
                          int32_t* disparity_grid,int32_t *grid_dims,uint8_t* I1_desc,uint8_t* I2_desc,
                          int32_t *P,int32_t &plane_radius,bool &valid,bool &right_image,float* D);
