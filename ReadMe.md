@@ -32,7 +32,7 @@ the methods where converted to public to allow for the testing and comparison of
     
 ## In this fork
 
-* This fork focus mainly on improvement of GPU implementaion of the algorithm. 
+* This fork focuses mainly on improvement of GPU implementaion of the algorithm. 
 
 * Added opencv mat support with GPU (can be ported easliy to CPU), so you can read, wirte matrices and make further processing using opencv APIs.
 
@@ -43,6 +43,8 @@ the methods where converted to public to allow for the testing and comparison of
 * Implemented Sobel filter on GPU
 
 * Implemented Median filter on GPU
+
+* Edited the code to work without SSE so it can run on arm processors
 
 * To build the GPU code with the new changes just type `make` in the terminal 
 
