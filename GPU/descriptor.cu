@@ -23,9 +23,6 @@ Edited by: Mostafa A.Saleh
 moustafa.i.saleh <at> gmail.com
 */
 #include "../CPU/descriptor.h"
-#include "../CPU/filter.h"
-#include <emmintrin.h>
-
 #include <iostream>
 
 using namespace std;
@@ -79,21 +76,21 @@ void sobelGPU( const uint8_t* in, uint8_t* out_v, uint8_t* out_h, int32_t w, int
     cudaFree(d_in);
 }
 Descriptor::Descriptor(uint8_t* I,int32_t width,int32_t height,int32_t bpl,bool half_resolution) {
-  I_desc        = (uint8_t*)_mm_malloc(16*width*height*sizeof(uint8_t),16);
-  uint8_t* I_du = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
-  uint8_t* I_dv = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
+  I_desc        = (uint8_t*)malloc(16*width*height*sizeof(uint8_t));
+  uint8_t* I_du = (uint8_t*)malloc(bpl*height*sizeof(uint8_t));
+  uint8_t* I_dv = (uint8_t*)malloc(bpl*height*sizeof(uint8_t));
   //Filter call so sobel filter to get lines better
  // filter::sobel3x3(I,I_du,I_dv,bpl,height);
    sobelGPU(I,I_du,I_dv,width,height);//fliped
   //Create 16 byte discriptors for each deep image pixel
  
   createDescriptor(I_du,I_dv,width,height,bpl,half_resolution);
-  _mm_free(I_du);
-  _mm_free(I_dv);
+  free(I_du);
+  free(I_dv);
 }
 
 Descriptor::~Descriptor() {
-  _mm_free(I_desc);
+  free(I_desc);
 }
 
 void Descriptor::createDescriptor (uint8_t* I_du,uint8_t* I_dv,int32_t width,int32_t height,int32_t bpl,bool half_resolution) {
